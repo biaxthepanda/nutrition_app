@@ -312,12 +312,12 @@ class _RadialPainter extends CustomPainter
     Offset center = Offset(size.width / 2, size.height / 2);
     double relativeProgress = 360 * progress;
 
-    canvas.drawArc(Rect.fromCircle(center: center, radius: size.height /2),
+    canvas.drawArc(Rect.fromCircle(center: center, radius: size.width /2),
       math.radians(-90),
       math.radians(-relativeProgress), 
       false,
       paintProgress);
-    canvas.drawArc(Rect.fromCircle(center: center, radius: size.height/2),
+    canvas.drawArc(Rect.fromCircle(center: center, radius: size.width/2),
       math.radians(-90),
       math.radians(360), 
       false,
