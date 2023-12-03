@@ -1,21 +1,64 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:nutrition_app/model/meal.dart';
 import 'package:vector_math/vector_math_64.dart' as math;
 import 'package:intl/intl.dart';
+import 'package:nutrition_app/model/meal_manager.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-class ProfileScreen extends StatelessWidget {
+
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+
+  DateTime today = DateTime.now();
+  DateTime todaysDate = DateTime(DateTime.now().year,DateTime.now().month,DateTime.now().day);
+  
+  final TextEditingController mealNameEC = TextEditingController();
+  final TextEditingController proteinEC= TextEditingController();
+  final TextEditingController cabsEC = TextEditingController();
+  final TextEditingController calsEC = TextEditingController();
+  final TextEditingController fatsEC = TextEditingController();
+  List<Meal>? todaysMeals;
+  List<double> todaysNutritions = [0,0,0,0];
+  double todaysCalory = 0;
+  double todaysPro = 0;
+  double todaysCab = 0;
+  double todaysFat = 0;
+  //0 calory, 1 protein, 2 fat, 3 cab
+
+  Future<Map<String, dynamic>> fetchFoodNutrition(String foodName) async {
+    final response = await http.get(Uri.parse('https://localhost:7144/api/nutrition/food/$foodName'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to load nutrition data');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height;
     final width = MediaQuery.of(context).size.width;
-
-    final today = DateTime.now();
+    todaysMeals = getTodaysMeals(todaysDate);
+    final todayDateWithHours = DateTime.now();
+    setTodaysNutritions(todaysMeals, todaysNutritions);
+    todaysCalory = todaysNutritions[0];
+    todaysPro = todaysNutritions[1];
+    todaysCab = todaysNutritions[2];
+    todaysFat = todaysNutritions[3];
 
     return Scaffold(
       backgroundColor: const Color(0xFFE9E9E9),
-
+      
       body: Stack(
         children: <Widget>[
           //TOP CURVED PART
@@ -37,12 +80,12 @@ class ProfileScreen extends StatelessWidget {
                   //Hello User & Date
                   ListTile(
                     title: Text(
-                      "${DateFormat("EEEE").format(today)}, ${DateFormat("d MMMM").format(today)}",
+                      "${DateFormat("EEEE").format(todayDateWithHours)}, ${DateFormat("d MMMM").format(todayDateWithHours)}",
                       ),
                     subtitle: Text("Hello, Ikbal"),
                     //trailing: , Profile Picture
                   ),
-                  //PRROGRESSES
+                  //PROGRESSES
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     mainAxisSize: MainAxisSize.max,
@@ -53,7 +96,8 @@ class ProfileScreen extends StatelessWidget {
                       _RadialProgress(
                         width: width * 0.25,
                         height: height * 0.25,
-                        progress:  getTotalCalory() / 2500,
+                        progress:  todaysCalory / 2500,
+                        calLeft: 2500 - todaysCalory,
                       ),
                       //NUTRITION PROGRESS
                       Column(
@@ -61,8 +105,8 @@ class ProfileScreen extends StatelessWidget {
 
                           _NutritionProgress(
                             nutrition: "Protein",
-                            leftAmount: 72 ,
-                            progress: 0.5,
+                            leftAmount: 120 - todaysPro,
+                            progress: todaysPro/120,
                             progressColor: Colors.green.shade400,
                             width: width * 0.4,
                             height: height * 0.015,
@@ -70,8 +114,8 @@ class ProfileScreen extends StatelessWidget {
 
                           _NutritionProgress(
                             nutrition: "Cabs",
-                            leftAmount: 72 ,
-                            progress: 0.5,
+                            leftAmount: 120 - todaysCab ,
+                            progress: todaysCab/120,
                             progressColor: Colors.orange.shade400,
                             width: width * 0.4,
                             height: height * 0.015,
@@ -79,8 +123,8 @@ class ProfileScreen extends StatelessWidget {
 
                           _NutritionProgress(
                             nutrition: "Fat",
-                            leftAmount: 72 ,
-                            progress: 0.5,
+                            leftAmount: 120 - todaysFat ,
+                            progress: todaysFat/120,
                             progressColor: Colors.yellow,
                             width: width * 0.4,
                             height: height * 0.015,
@@ -115,7 +159,7 @@ class ProfileScreen extends StatelessWidget {
                         right: 16,
                       ),
                       child: Text(
-                        "TODAY'S MEALS",
+                        "TODAYS MEALS",
                         style: TextStyle(
                           color: Colors.blueGrey,
                           fontSize: 16,
@@ -126,9 +170,11 @@ class ProfileScreen extends StatelessWidget {
                     Expanded(
                       child: SingleChildScrollView
                         (child: Column(
+                            
                             children: <Widget>[
-                              for(int i = 0; i < meals.length; i++)
-                                _MealCard(meal: meals[i],
+                              if(todaysMeals != null)
+                              for(int i = 0; i < todaysMeals!.length; i++)
+                                MealCard2(meal: todaysMeals![i],
                               ),
                             ],
                         )
@@ -145,75 +191,124 @@ class ProfileScreen extends StatelessWidget {
           ),
         ],
       ), 
-
-      //BOTTOM NAVIGATION BAR
-      bottomNavigationBar: ClipRRect(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
-        child: BottomNavigationBar(
-
-          iconSize: 40,
-          selectedIconTheme: const IconThemeData(
-            color: Color(0xFF200087),
-          ),
-          unselectedIconTheme: const IconThemeData(
-            color: Colors.black,
-          ),
-          showSelectedLabels: true,
-          showUnselectedLabels: false,
-      
-          items: const [
-            BottomNavigationBarItem(
-              label: "Home",
-              icon: Padding(
-                padding: EdgeInsets.only(top: 8.0),
-                child: Icon(
-                  Icons.home
+      //ADD MEAL
+      floatingActionButton: FloatingActionButton(
+        onPressed: ()
+        {
+          showDialog(context: context, builder: (context){
+            return AlertDialog(
+              scrollable: true,
+              title: Text("Add Meal"),
+              content: Padding(
+                padding: EdgeInsets.all(8),
+                child: Column(
+                  children: [
+                     TextField(controller: mealNameEC,),
+                  ],
                 ),
               ),
-            ),
-      
-            BottomNavigationBarItem(
-              label: "Search",
-              icon: Padding(
-                padding: EdgeInsets.only(top: 8.0),
-                child: Icon(
-                  Icons.search
-                ),
-              ),
-            ),
-      
-            BottomNavigationBarItem(
-              label: "Profile",
-              icon: Padding(
-                padding: EdgeInsets.only(top: 8.0),
-                child: Icon(
-                  Icons.person
-                ),
-              ),
-            ),
-            
+              actions: [
+              //MEAL API
+                ElevatedButton(
+                    onPressed: () async {
+                    try {
+                      final nutritionData = await fetchFoodNutrition(mealNameEC.text);
+                      Meal meal = Meal.fromJson(nutritionData);
+                      DateTime today = DateTime(todayDateWithHours.year,todayDateWithHours.month,todayDateWithHours.day);
+                      AddToMealHistory(today, meal);
+                      setState(() {
+                        todaysMeals = getTodaysMeals(todaysDate);
+                      });
+                      print(meal);
+                    } catch (e) {
+                      print('Error: $e');
+                    }
+                  }, 
+                  child: Text('Add Meal'),
+                  ),
+                //OWN MEAL
+                ElevatedButton(
+                    onPressed: (){
+                      showDialog(context: context, builder: (context)
+                      {
+                        return AlertDialog(
+                            scrollable: true,
+                            title: Text("Event Name"),
+                            content: Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Column(
+                              children: [
+                                TextField(controller: mealNameEC,),
+                                TextField(controller: calsEC,keyboardType: TextInputType.number,),
+                                TextField(controller: proteinEC,keyboardType: TextInputType.number,),
+                                TextField(controller: cabsEC,keyboardType: TextInputType.number,),
+                                TextField(controller: fatsEC,keyboardType: TextInputType.number,),
+                              ],
+                            ),
+                            ),
+                            actions: [
+                              ElevatedButton(onPressed: ()
+                              {
+                                Meal newMeal = Meal(
+                                  name: mealNameEC.text,
+                                  calory:  double.parse(calsEC.text),
+                                  protein: double.parse(proteinEC.text),
+                                  cabs:    double.parse(cabsEC.text),
+                                  fats:    double.parse(fatsEC.text)
+                                );
+                                AddToMealHistory(todaysDate, newMeal);
+                                Navigator.of(context).pop();
+                                Navigator.of(context).pop();
+                                setState(() {
+                                  todaysMeals = getTodaysMeals(todaysDate);
+                                });
+                              },
+                              child: Text("Add")),
+                            ],
+                        );
+                      });
+                    }, 
+                  child: Text('Add your own'),
+                  ),
+              ],
+            );
+            });
+        },
+        child: Row(
+          children: [
+            const Icon(Icons.add),
+            const Icon(Icons.dining_sharp),
           ],
-      
-        //Add a label style here TOO ADD! 
         ),
-      ),
+        ),
+
     );
   }
 }
 
-int getTotalCalory()
+double setTodaysNutritions(List<Meal>? todaysMeals,List<double>? todaysNutritions)
 {
-  int totalCalory = 0;
-  for(int i = 0; i < meals.length; i++)
+  double totalCalory = 0;
+  if(todaysMeals == null) return 0;
+  if(todaysNutritions == null) return 0;
+  todaysNutritions[0] = 0;todaysNutritions[1] = 0;todaysNutritions[2] = 0;todaysNutritions[3] = 0;
+
+  for(int i = 0; i < todaysMeals.length; i++)
   {
-    totalCalory += meals[i].calory;
+    todaysNutritions[0] += todaysMeals[i].calory;
+    todaysNutritions[1] += todaysMeals[i].protein;
+    todaysNutritions[2] += todaysMeals[i].cabs;
+    todaysNutritions[3] += todaysMeals[i].fats;
   }
   return totalCalory;
 }
 
+
+
+
 class _NutritionProgress extends StatelessWidget {
   final String nutrition;
-  final int leftAmount;
+  final double leftAmount;
   final double progress,width,height;
   final Color progressColor;
 
@@ -243,7 +338,7 @@ class _NutritionProgress extends StatelessWidget {
               ),
               Container(
                   height: height,
-                  width: width * progress,
+                  width: width * min(1, progress),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.all(Radius.circular(5)), color: progressColor,
                 ),
@@ -260,8 +355,8 @@ class _NutritionProgress extends StatelessWidget {
 
 class _RadialProgress extends StatelessWidget {
 
-  final double height,width,progress;
-  const _RadialProgress({super.key, required this.height, required this.width, required this.progress});
+  final double height,width,progress,calLeft;
+  const _RadialProgress({super.key, required this.height, required this.width, required this.progress, required this.calLeft});
 
   @override
   Widget build(BuildContext context) {
@@ -277,7 +372,7 @@ class _RadialProgress extends StatelessWidget {
             textAlign: TextAlign.center,
             text: TextSpan(
               children: [
-                TextSpan(text: "1731", style: Theme.of(context).textTheme.bodyText2),
+                TextSpan(text: calLeft.toString(), style: Theme.of(context).textTheme.bodyText2),
                 TextSpan(text: "\n"),
                 TextSpan(text: "kcal left", style: Theme.of(context).textTheme.bodyText2)
               ]
